@@ -63,16 +63,32 @@ def get_relevant_code(repo_path: str, affected_files: list) -> dict:
 
 
 def navigate(repo_path: str, affected_files: list) -> dict:
-    """
-    Main entry point for the navigator agent.
-    Returns both the file structure map and the relevant code.
-    """
     print(f"\n[Navigator] Scanning repo: {repo_path}")
 
     structure = get_file_structure(repo_path)
     print(f"[Navigator] Found files: {list(structure.keys())}")
 
-    relevant_code = get_relevant_code(repo_path, affected_files)
+    # filter affected_files to only ones that actually exist
+    existing_files = []
+    for f in affected_files:
+        if os.path.exists(os.path.join(repo_path, f)):
+            existing_files.append(f)
+        else:
+            print(f"[Navigator] Warning: {f} not found, skipping.")
+
+    # fallback: if nothing matched, use all non-test python files
+    if not existing_files:
+        print("[Navigator] No affected files found. Falling back to all source files.")
+        existing_files = [
+            f for f in structure.keys()
+            if not f.startswith("test_")
+            and not f.startswith("agents/")
+            and f.endswith(".py")
+            and f not in ("orchestrator.py", "agent.py")
+        ]
+        print(f"[Navigator] Fallback files: {existing_files}")
+
+    relevant_code = get_relevant_code(repo_path, existing_files)
     print(f"[Navigator] Loaded relevant files: {list(relevant_code.keys())}")
 
     return {

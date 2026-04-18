@@ -39,7 +39,7 @@ Expected behavior:
 {issue['expected_behavior']}
 
 Edge cases to handle:
-{', '.join(issue.get('test_hints', []))}
+{', '.join(str(hint) if not isinstance(hint, str) else hint for hint in issue.get('test_hints', []))}
 
 Current code in {filename}:
 ```python
