@@ -4,18 +4,6 @@ import re
 
 
 def parse_issue(issue_text: str, available_files: list = None) -> dict:
-    """
-    Takes raw issue text, returns structured JSON.
-
-    Output shape:
-    {
-        "intent": "what the issue is asking to fix",
-        "affected_files": ["list of files likely involved"],
-        "expected_behavior": "what correct behavior looks like",
-        "test_hints": ["edge cases the fix should handle"]
-    }
-    """
-
     files_context = ""
     if available_files:
         files_context = f"""
@@ -57,7 +45,6 @@ Return raw JSON only. No explanation. No markdown fences."""
     )
 
     raw = response["message"]["content"].strip()
-
     print(f"[Issue Parser] Raw response:\n{raw}\n")
 
     if raw.startswith("```"):
@@ -67,27 +54,22 @@ Return raw JSON only. No explanation. No markdown fences."""
     try:
         parsed = json.loads(raw)
 
-        # normalize test_hints — always a list of strings
         if "test_hints" in parsed:
             normalized = []
             for hint in parsed["test_hints"]:
                 if isinstance(hint, str):
                     normalized.append(hint)
                 elif isinstance(hint, dict):
-                    # flatten dict hint into a readable string
-                    normalized.append(
-                        hint.get("description", str(hint))
-                    )
+                    normalized.append(hint.get("description", str(hint)))
                 else:
                     normalized.append(str(hint))
             parsed["test_hints"] = normalized
-        # safety check: filter affected_files to only existing ones
+
         if available_files and "affected_files" in parsed:
             parsed["affected_files"] = [
                 f for f in parsed["affected_files"]
                 if f in available_files
             ]
-            # if model still returned nothing valid, fall back
             if not parsed["affected_files"]:
                 parsed["affected_files"] = available_files
 

@@ -5,61 +5,83 @@ from chromadb.utils import embedding_functions
 
 
 def extract_functions(source_code: str, filename: str) -> list:
-    """
-    Parse a Python file and extract individual functions as chunks.
-    Returns list of { name, code, docstring, filename }
-    """
     chunks = []
 
     try:
         tree = ast.parse(source_code)
     except SyntaxError:
-        # unparseable file — treat whole file as one chunk
         return [{
             "name": filename,
             "code": source_code,
             "docstring": "",
-            "filename": filename
+            "filename": filename,
+            "class_name": None
         }]
+
+    source_lines = source_code.split("\n")
+
+    class_ranges = {}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ClassDef):
+            class_ranges[node.name] = (node.lineno, node.end_lineno)
+
+    def get_parent_class(func_lineno: int) -> str:
+        for class_name, (start, end) in class_ranges.items():
+            if start <= func_lineno <= end:
+                return class_name
+        return None
 
     for node in ast.walk(tree):
         if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             continue
 
-        # extract the source lines for just this function
         start = node.lineno - 1
         end = node.end_lineno
-        lines = source_code.split("\n")[start:end]
-        func_code = "\n".join(lines)
+        func_code = "\n".join(source_lines[start:end])
+        docstring = ast.get_docstring(node) or ""
+        parent_class = get_parent_class(node.lineno)
+        qualified_name = f"{parent_class}.{node.name}" if parent_class else node.name
 
-        # extract docstring if present
+        chunks.append({
+            "name": qualified_name,
+            "code": func_code,
+            "docstring": docstring,
+            "filename": filename,
+            "class_name": parent_class
+        })
+
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.ClassDef):
+            continue
+
+        start = node.lineno - 1
+        end = node.end_lineno
+        class_code = "\n".join(source_lines[start:end])
         docstring = ast.get_docstring(node) or ""
 
         chunks.append({
             "name": node.name,
-            "code": func_code,
+            "code": class_code,
             "docstring": docstring,
-            "filename": filename
+            "filename": filename,
+            "class_name": None
         })
 
     return chunks
 
 
 def build_index(repo_path: str, collection_name: str = "codebase") -> chromadb.Collection:
-    """
-    Walk the repo, extract all functions, embed them, store in chromadb.
-    Returns the collection for querying.
-    """
     client = chromadb.Client()
 
-    # delete existing collection if it exists
     try:
         client.delete_collection(collection_name)
     except Exception:
         pass
 
-    # use chromadb's built-in sentence transformer embeddings
-    embedding_fn = embedding_functions.DefaultEmbeddingFunction()
+    embedding_fn = embedding_functions.OllamaEmbeddingFunction(
+        url="http://localhost:11434/api/embeddings",
+        model_name="nomic-embed-text"
+    )
 
     collection = client.create_collection(
         name=collection_name,
@@ -80,12 +102,17 @@ def build_index(repo_path: str, collection_name: str = "codebase") -> chromadb.C
         for filename in files:
             if not filename.endswith(".py"):
                 continue
-            # skip test files and infrastructure files
-            if filename.startswith("test_") or filename in ("orchestrator.py", "agent.py"):
-                continue
 
             filepath = os.path.join(root, filename)
             relative = os.path.relpath(filepath, repo_path)
+
+            # skip everything except user source files
+            if relative.startswith("agents/"):
+                continue
+            if filename in ("orchestrator.py", "agent.py"):
+                continue
+            if filename.startswith("test_"):
+                continue
 
             with open(filepath, "r") as f:
                 source = f.read()
@@ -93,8 +120,6 @@ def build_index(repo_path: str, collection_name: str = "codebase") -> chromadb.C
             chunks = extract_functions(source, relative)
 
             for chunk in chunks:
-                # the document is what gets embedded
-                # combine name + docstring + code for richer embedding
                 document = f"Function: {chunk['name']}\n{chunk['docstring']}\n{chunk['code']}"
                 doc_id = f"{relative}::{chunk['name']}"
 
@@ -102,12 +127,13 @@ def build_index(repo_path: str, collection_name: str = "codebase") -> chromadb.C
                 metadatas.append({
                     "filename": chunk["filename"],
                     "function_name": chunk["name"],
+                    "class_name": chunk.get("class_name"),
                     "code": chunk["code"]
                 })
                 ids.append(doc_id)
 
     if documents:
-        collection.add(
+        collection.upsert(
             documents=documents,
             metadatas=metadatas,
             ids=ids
@@ -119,11 +145,7 @@ def build_index(repo_path: str, collection_name: str = "codebase") -> chromadb.C
     return collection
 
 
-def retrieve_relevant_code(collection: chromadb.Collection, issue_text: str, top_k: int = 5) -> dict:
-    """
-    Query the collection with the issue text.
-    Returns { filename: code_snippet } for the top_k most relevant functions.
-    """
+def retrieve_relevant_code(collection, issue_text: str, top_k: int = 5) -> dict:
     results = collection.query(
         query_texts=[issue_text],
         n_results=min(top_k, collection.count())
@@ -138,13 +160,58 @@ def retrieve_relevant_code(collection: chromadb.Collection, issue_text: str, top
         filename = metadata["filename"]
         code = metadata["code"]
 
-        # group by file — append functions from same file together
+        # never return agent infrastructure files as relevant code
+        # these should never be modified by the coder
+        protected = [
+            "orchestrator.py",
+            "agent.py",
+        ]
+        if filename.startswith("agents/"):
+            continue
+        if filename in protected:
+            continue
+
         if filename not in relevant:
             relevant[filename] = ""
         relevant[filename] += code + "\n\n"
 
-    print(f"[Retriever] Retrieved {len(results['metadatas'][0])} relevant functions")
+    print(f"[Retriever] Retrieved {len(results['metadatas'][0])} functions")
     for meta in results["metadatas"][0]:
-        print(f"  - {meta['filename']}::{meta['function_name']}")
+        filename = meta["filename"]
+        if not filename.startswith("agents/") and filename not in ["orchestrator.py", "agent.py"]:
+            print(f"  - {filename}::{meta['function_name']}")
 
     return relevant
+
+def update_index(collection, repo_path: str, filename: str):
+    filepath = os.path.join(repo_path, filename)
+
+    with open(filepath, "r") as f:
+        source = f.read()
+
+    chunks = extract_functions(source, filename)
+
+    documents = []
+    metadatas = []
+    ids = []
+
+    for chunk in chunks:
+        document = f"Function: {chunk['name']}\n{chunk['docstring']}\n{chunk['code']}"
+        doc_id = f"{filename}::{chunk['name']}"
+
+        documents.append(document)
+        metadatas.append({
+            "filename": chunk["filename"],
+            "function_name": chunk["name"],
+            "class_name": chunk.get("class_name"),
+            "code": chunk["code"]
+        })
+        ids.append(doc_id)
+
+    if documents:
+        collection.upsert(
+            documents=documents,
+            metadatas=metadatas,
+            ids=ids
+        )
+        print(f"[Retriever] Updated index for {filename}")

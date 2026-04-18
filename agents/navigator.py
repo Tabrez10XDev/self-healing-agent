@@ -1,17 +1,16 @@
 import os
 import ast
+from agents.retriever import build_index, retrieve_relevant_code
 
 
 def get_file_structure(repo_path: str) -> dict:
     """
     Walk the repo and extract function/class signatures from Python files.
     Returns { filename: [list of function names] }
-    Does NOT read full file contents — just the map.
     """
     structure = {}
 
     for root, dirs, files in os.walk(repo_path):
-        # skip hidden folders, venv, pycache
         dirs[:] = [
             d for d in dirs
             if not d.startswith(".")
@@ -28,70 +27,66 @@ def get_file_structure(repo_path: str) -> dict:
             try:
                 with open(filepath, "r") as f:
                     source = f.read()
-
                 tree = ast.parse(source)
                 functions = [
                     node.name for node in ast.walk(tree)
                     if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
                 ]
                 structure[relative_path] = functions
-
             except Exception:
                 structure[relative_path] = []
 
     return structure
 
 
-def get_relevant_code(repo_path: str, affected_files: list) -> dict:
+def get_test_file_contents(repo_path: str) -> dict:
+    test_files = {}
+    # only look in root directory, not subdirectories
+    for filename in os.listdir(repo_path):
+        if filename.startswith("test_") and filename.endswith(".py"):
+            filepath = os.path.join(repo_path, filename)
+            with open(filepath, "r") as f:
+                test_files[filename] = f.read()
+    return test_files
+
+def navigate(repo_path: str, issue_text: str, affected_files: list) -> dict:
     """
-    Read the full content of files the issue parser flagged as relevant.
-    Returns { filename: full_source_code }
+    Main entry point for the navigator agent.
+
+    Phase 3 upgrade:
+    - Uses semantic retrieval to find relevant functions
+    - Also reads test files so the coder knows what to satisfy
+    - Falls back to affected_files if retrieval finds nothing
     """
-    relevant = {}
-
-    for filename in affected_files:
-        filepath = os.path.join(repo_path, filename)
-
-        if not os.path.exists(filepath):
-            print(f"Warning: {filename} not found in repo.")
-            continue
-
-        with open(filepath, "r") as f:
-            relevant[filename] = f.read()
-
-    return relevant
-
-
-def navigate(repo_path: str, affected_files: list) -> dict:
     print(f"\n[Navigator] Scanning repo: {repo_path}")
 
     structure = get_file_structure(repo_path)
     print(f"[Navigator] Found files: {list(structure.keys())}")
 
-    # filter affected_files to only ones that actually exist
-    existing_files = []
-    for f in affected_files:
-        if os.path.exists(os.path.join(repo_path, f)):
-            existing_files.append(f)
-        else:
-            print(f"[Navigator] Warning: {f} not found, skipping.")
+    # semantic retrieval
+    print("[Navigator] Building semantic index...")
+    collection = build_index(repo_path)
+    relevant_code = retrieve_relevant_code(collection, issue_text, top_k=5)
 
-    # fallback: if nothing matched, use all non-test python files
-    if not existing_files:
-        print("[Navigator] No affected files found. Falling back to all source files.")
-        existing_files = [
-            f for f in structure.keys()
-            if not f.startswith("test_")
-            and not f.startswith("agents/")
-            and f.endswith(".py")
-            and f not in ("orchestrator.py", "agent.py")
-        ]
-        print(f"[Navigator] Fallback files: {existing_files}")
+    # fallback to affected_files if retrieval returned nothing
+    if not relevant_code:
+        print("[Navigator] Retrieval returned nothing, falling back to affected_files")
+        for filename in affected_files:
+            filepath = os.path.join(repo_path, filename)
+            if os.path.exists(filepath):
+                with open(filepath, "r") as f:
+                    relevant_code[filename] = f.read()
 
-    relevant_code = get_relevant_code(repo_path, existing_files)
-    print(f"[Navigator] Loaded relevant files: {list(relevant_code.keys())}")
+    # always include test files
+    test_files = get_test_file_contents(repo_path)
+    print(f"[Navigator] Loaded test files: {list(test_files.keys())}")
 
     return {
         "structure": structure,
-        "relevant_code": relevant_code
+        "relevant_code": relevant_code,
+        "test_files": test_files,
+        "collection": collection
     }
+    
+    
+    

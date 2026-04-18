@@ -1,7 +1,8 @@
 import ollama
 
 
-def generate_fix(issue: dict, relevant_code: dict, previous_attempt: str = None, diagnosis: str = None) -> dict:
+def generate_fix(issue: dict, relevant_code: dict, test_files: dict = None,
+                 previous_attempt: str = None, diagnosis: str = None) -> dict:
     """
     Takes the parsed issue + relevant code, returns fixed code.
     
@@ -9,14 +10,23 @@ def generate_fix(issue: dict, relevant_code: dict, previous_attempt: str = None,
     knows what was tried before and why it failed.
     
     Returns { filename: fixed_code } for each affected file.
+    Now receives test file contents so it knows
+    exactly what assertions it needs to satisfy.
     """
-
     results = {}
+
+    # build test context string
+    test_context = ""
+    if test_files:
+        test_context = "\n\nHere are the actual test assertions you must satisfy:\n"
+        for test_filename, test_source in test_files.items():
+            test_context += f"\n{test_filename}:\n```python\n{test_source}\n```"
 
     for filename, source_code in relevant_code.items():
 
         if previous_attempt and diagnosis:
-            context = f"""A previous fix attempt failed.
+            retry_context = f"""
+A previous fix attempt failed.
 
 Previous fix:
 ```python
@@ -26,9 +36,9 @@ Previous fix:
 Diagnosis of why it failed:
 {diagnosis}
 
-Use this diagnosis to guide a different approach this time."""
+Use this diagnosis to guide a different approach."""
         else:
-            context = "This is the first attempt."
+            retry_context = "This is the first attempt."
 
         prompt = f"""You are a Python debugging expert.
 
@@ -39,14 +49,15 @@ Expected behavior:
 {issue['expected_behavior']}
 
 Edge cases to handle:
-{', '.join(str(hint) if not isinstance(hint, str) else hint for hint in issue.get('test_hints', []))}
+{', '.join(issue.get('test_hints', []))}
+{test_context}
 
 Current code in {filename}:
 ```python
 {source_code}
 ```
 
-{context}
+{retry_context}
 
 Return ONLY the complete fixed Python code for {filename}.
 No explanation. No markdown fences. Raw Python only."""
@@ -68,8 +79,6 @@ No explanation. No markdown fences. Raw Python only."""
         )
 
         raw = response["message"]["content"].strip()
-
-        # strip markdown fences
         if raw.startswith("```"):
             lines = raw.split("\n")
             raw = "\n".join(lines[1:-1])
