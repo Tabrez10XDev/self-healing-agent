@@ -113,6 +113,8 @@ def build_index(repo_path: str, collection_name: str = "codebase") -> chromadb.C
                 continue
             if filename.startswith("test_"):
                 continue
+            if "_tests" in filename:
+                continue
 
             with open(filepath, "r") as f:
                 source = f.read()

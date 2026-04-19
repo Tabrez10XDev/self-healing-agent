@@ -53,7 +53,7 @@ def run(issue_text: str, repo_path: str, test_file: str = "test_target.py", max_
         # Step 3: generate fix — now passes test_files
         print("\n[Step 3/5] Generating fix...")
         diagnosis_text = previous_diagnoses[-1] if previous_diagnoses else None
-        fixed_code = generate_fix(
+        fixed_code, tokens = generate_fix(
             issue=issue,
             relevant_code=relevant_code,
             test_files=test_files,

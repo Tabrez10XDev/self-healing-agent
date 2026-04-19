@@ -41,9 +41,11 @@ def get_file_structure(repo_path: str) -> dict:
 
 def get_test_file_contents(repo_path: str) -> dict:
     test_files = {}
-    # only look in root directory, not subdirectories
     for filename in os.listdir(repo_path):
-        if filename.startswith("test_") and filename.endswith(".py"):
+        # catch both test_*.py and *_tests.py naming conventions
+        if filename.endswith(".py") and (
+            filename.startswith("test_") or filename.endswith("_tests.py")
+        ):
             filepath = os.path.join(repo_path, filename)
             with open(filepath, "r") as f:
                 test_files[filename] = f.read()

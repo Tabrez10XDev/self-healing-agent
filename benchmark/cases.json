@@ -1,0 +1,142 @@
+[
+  {
+    "id": "case_01",
+    "difficulty": "easy",
+    "issue": "The add function returns the wrong result because it subtracts instead of adds.",
+    "buggy_file": "case_01.py",
+    "test_file": "case_01_tests.py"
+  },
+  {
+    "id": "case_02",
+    "difficulty": "easy",
+    "issue": "The multiply function always returns zero regardless of input.",
+    "buggy_file": "case_02.py",
+    "test_file": "case_02_tests.py"
+  },
+  {
+    "id": "case_03",
+    "difficulty": "easy",
+    "issue": "The is_even function returns True for odd numbers and False for even numbers — the logic is inverted.",
+    "buggy_file": "case_03.py",
+    "test_file": "case_03_tests.py"
+  },
+  {
+    "id": "case_04",
+    "difficulty": "easy",
+    "issue": "The get_first_element function crashes with IndexError on empty lists instead of returning None.",
+    "buggy_file": "case_04.py",
+    "test_file": "case_04_tests.py"
+  },
+  {
+    "id": "case_05",
+    "difficulty": "easy",
+    "issue": "The celsius_to_fahrenheit function uses the wrong formula and returns incorrect temperatures.",
+    "buggy_file": "case_05.py",
+    "test_file": "case_05_tests.py"
+  },
+  {
+    "id": "case_06",
+    "difficulty": "easy",
+    "issue": "The count_words function counts characters instead of words.",
+    "buggy_file": "case_06.py",
+    "test_file": "case_06_tests.py"
+  },
+  {
+    "id": "case_07",
+    "difficulty": "medium",
+    "issue": "The fibonacci function returns incorrect values because the base cases are wrong.",
+    "buggy_file": "case_07.py",
+    "test_file": "case_07_tests.py"
+  },
+  {
+    "id": "case_08",
+    "difficulty": "medium",
+    "issue": "The flatten_list function only flattens one level deep instead of fully flattening nested lists.",
+    "buggy_file": "case_08.py",
+    "test_file": "case_08_tests.py"
+  },
+  {
+    "id": "case_09",
+    "difficulty": "medium",
+    "issue": "The binary_search function always returns -1 because the comparison operators are wrong.",
+    "buggy_file": "case_09.py",
+    "test_file": "case_09_tests.py"
+  },
+  {
+    "id": "case_10",
+    "difficulty": "medium",
+    "issue": "The remove_duplicates function removes all occurrences of duplicate values instead of keeping one.",
+    "buggy_file": "case_10.py",
+    "test_file": "case_10_tests.py"
+  },
+  {
+    "id": "case_11",
+    "difficulty": "medium",
+    "issue": "The is_palindrome function fails on strings with spaces and mixed case like 'Race car'.",
+    "buggy_file": "case_11.py",
+    "test_file": "case_11_tests.py"
+  },
+  {
+    "id": "case_12",
+    "difficulty": "medium",
+    "issue": "The group_by function groups items incorrectly — it overwrites existing groups instead of appending to them.",
+    "buggy_file": "case_12.py",
+    "test_file": "case_12_tests.py"
+  },
+  {
+    "id": "case_13",
+    "difficulty": "medium",
+    "issue": "The calculate_grade function has off-by-one errors in the grade boundaries.",
+    "buggy_file": "case_13.py",
+    "test_file": "case_13_tests.py"
+  },
+  {
+    "id": "case_14",
+    "difficulty": "hard",
+    "issue": "The merge_sorted_lists function fails when one list is empty and produces wrong order on equal elements.",
+    "buggy_file": "case_14.py",
+    "test_file": "case_14_tests.py"
+  },
+  {
+    "id": "case_15",
+    "difficulty": "hard",
+    "issue": "The parse_csv_line function incorrectly handles quoted fields containing commas.",
+    "buggy_file": "case_15.py",
+    "test_file": "case_15_tests.py"
+  },
+  {
+    "id": "case_16",
+    "difficulty": "hard",
+    "issue": "The LRU cache implementation evicts the wrong item — it removes the most recently used instead of least recently used.",
+    "buggy_file": "case_16.py",
+    "test_file": "case_16_tests.py"
+  },
+  {
+    "id": "case_17",
+    "difficulty": "hard",
+    "issue": "The tokenizer function fails on edge cases: empty strings, multiple spaces, and strings with only punctuation.",
+    "buggy_file": "case_17.py",
+    "test_file": "case_17_tests.py"
+  },
+  {
+    "id": "case_18",
+    "difficulty": "hard",
+    "issue": "The graph depth-first search returns nodes in wrong order and misses disconnected components.",
+    "buggy_file": "case_18.py",
+    "test_file": "case_18_tests.py"
+  },
+  {
+    "id": "case_19",
+    "difficulty": "hard",
+    "issue": "The rate limiter allows too many requests through because it uses the wrong time window calculation.",
+    "buggy_file": "case_19.py",
+    "test_file": "case_19_tests.py"
+  },
+  {
+    "id": "case_20",
+    "difficulty": "hard",
+    "issue": "The expression evaluator incorrectly handles operator precedence for mixed addition and multiplication.",
+    "buggy_file": "case_20.py",
+    "test_file": "case_20_tests.py"
+  }
+]

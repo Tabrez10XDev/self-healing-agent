@@ -14,6 +14,7 @@ def generate_fix(issue: dict, relevant_code: dict, test_files: dict = None,
     exactly what assertions it needs to satisfy.
     """
     results = {}
+    total_tokens = 0  
 
     # build test context string
     test_context = ""
@@ -78,6 +79,10 @@ No explanation. No markdown fences. Raw Python only."""
             ]
         )
 
+        # accumulate token usage across all files
+        total_tokens += response.get("eval_count", 0)
+        total_tokens += response.get("prompt_eval_count", 0)
+        
         raw = response["message"]["content"].strip()
         if raw.startswith("```"):
             lines = raw.split("\n")
@@ -85,4 +90,5 @@ No explanation. No markdown fences. Raw Python only."""
 
         results[filename] = raw
 
-    return results
+    print(f"[Coder] Total tokens used: {total_tokens}")
+    return results, total_tokens

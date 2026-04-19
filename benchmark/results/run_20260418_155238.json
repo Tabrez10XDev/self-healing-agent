@@ -1,0 +1,41 @@
+{
+  "results": [
+    {
+      "case_id": "case_01",
+      "difficulty": "easy",
+      "success": false,
+      "attempts": 0,
+      "total_tokens": 0,
+      "elapsed_seconds": 8.46,
+      "failure_reason": "'tuple' object has no attribute 'items'"
+    }
+  ],
+  "summary": {
+    "total_cases": 1,
+    "total_passed": 0,
+    "pass_at_1": 0,
+    "pass_at_3": 0,
+    "pass_at_1_rate": 0.0,
+    "pass_at_3_rate": 0.0,
+    "avg_attempts": 0,
+    "avg_tokens": 0.0,
+    "avg_seconds": 8.46,
+    "by_difficulty": {
+      "easy": {
+        "total": 1,
+        "passed": 0,
+        "pass_rate": 0.0
+      },
+      "medium": {
+        "total": 0,
+        "passed": 0,
+        "pass_rate": 0
+      },
+      "hard": {
+        "total": 0,
+        "passed": 0,
+        "pass_rate": 0
+      }
+    }
+  }
+}
