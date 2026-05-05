@@ -1,20 +1,27 @@
 import ollama
 
 
-def generate_fix(issue: dict, relevant_code: dict, test_files: dict = None,
-                 previous_attempt: str = None, diagnosis: str = None) -> dict:
+def generate_fix(
+    issue: dict,
+    relevant_code: dict,
+    test_files: dict = None,
+    previous_attempt: str = None,
+    diagnosis: str = None,
+    prompting_strategy: str = "zero_shot",
+    model: str = "qwen2.5-coder:7b"
+) -> dict:
     """
     Takes the parsed issue + relevant code, returns fixed code.
-    
-    If previous_attempt and diagnosis are provided, the coder
-    knows what was tried before and why it failed.
-    
+
+    Supports three prompting strategies:
+      - zero_shot:       no examples, direct instruction
+      - few_shot:        2-3 in-context examples prepended to the prompt
+      - chain_of_thought: instructs the model to reason step-by-step before writing code
+
     Returns { filename: fixed_code } for each affected file.
-    Now receives test file contents so it knows
-    exactly what assertions it needs to satisfy.
     """
     results = {}
-    total_tokens = 0  
+    total_tokens = 0
 
     # build test context string
     test_context = ""
@@ -22,6 +29,68 @@ def generate_fix(issue: dict, relevant_code: dict, test_files: dict = None,
         test_context = "\n\nHere are the actual test assertions you must satisfy:\n"
         for test_filename, test_source in test_files.items():
             test_context += f"\n{test_filename}:\n```python\n{test_source}\n```"
+
+    FEW_SHOT_EXAMPLES = """
+Examples of correct bug fixes:
+
+Example 1:
+Buggy code:
+```python
+def divide(a, b):
+    return a / b
+```
+Fixed code:
+```python
+def divide(a, b):
+    if b == 0:
+        return 0.0
+    return a / b
+```
+
+Example 2:
+Buggy code:
+```python
+def first_char(s):
+    return s[0]
+```
+Fixed code:
+```python
+def first_char(s):
+    if not s:
+        return ""
+    return s[0]
+```
+
+Example 3:
+Buggy code:
+```python
+def count_evens(nums):
+    count = 0
+    for n in nums:
+        if n % 2 == 1:
+            count += 1
+    return count
+```
+Fixed code:
+```python
+def count_evens(nums):
+    count = 0
+    for n in nums:
+        if n % 2 == 0:
+            count += 1
+    return count
+```
+"""
+
+    COT_INSTRUCTION = """
+Before writing any code, reason through the following:
+1. What is each failing test actually asserting?
+2. What is wrong in the current code that causes those assertions to fail?
+3. What is the minimal correct fix for each issue?
+4. Are there any edge cases (empty input, zero, None) that need special handling?
+
+Write your reasoning first, then write FINAL CODE: followed by the complete fixed Python code only.
+"""
 
     for filename, source_code in relevant_code.items():
 
@@ -41,7 +110,7 @@ Use this diagnosis to guide a different approach."""
         else:
             retry_context = "This is the first attempt."
 
-        prompt = f"""You are a Python debugging expert.
+        base_prompt = f"""You are a Python debugging expert.
 
 Issue to fix:
 {issue['intent']}
@@ -59,18 +128,30 @@ Current code in {filename}:
 ```
 
 {retry_context}
+"""
 
-Return ONLY the complete fixed Python code for {filename}.
-No explanation. No markdown fences. Raw Python only."""
+        if prompting_strategy == "few_shot":
+            prompt = FEW_SHOT_EXAMPLES + "\n" + base_prompt
+            prompt += f"\nReturn ONLY the complete fixed Python code for {filename}.\nNo explanation. No markdown fences. Raw Python only."
+            system_msg = "You are a Python debugging expert. Return ONLY raw Python code. No markdown. No explanation."
 
-        print(f"\n[Coder] Generating fix for {filename}...")
+        elif prompting_strategy == "chain_of_thought":
+            prompt = base_prompt + COT_INSTRUCTION
+            system_msg = "You are a Python debugging expert. Think step by step, then write the fixed code after FINAL CODE:."
+
+        else:  # zero_shot
+            prompt = base_prompt
+            prompt += f"\nReturn ONLY the complete fixed Python code for {filename}.\nNo explanation. No markdown fences. Raw Python only."
+            system_msg = "You are a Python debugging expert. Return ONLY raw Python code. No markdown. No explanation."
+
+        print(f"\n[Coder] Strategy: {prompting_strategy} | Model: {model} | File: {filename}")
 
         response = ollama.chat(
-            model="qwen2.5-coder:7b",
+            model=model,
             messages=[
                 {
                     "role": "system",
-                    "content": "You are a Python debugging expert. Return ONLY raw Python code. No markdown. No explanation."
+                    "content": system_msg
                 },
                 {
                     "role": "user",
@@ -79,11 +160,16 @@ No explanation. No markdown fences. Raw Python only."""
             ]
         )
 
-        # accumulate token usage across all files
         total_tokens += response.get("eval_count", 0)
         total_tokens += response.get("prompt_eval_count", 0)
-        
+
         raw = response["message"]["content"].strip()
+
+        # extract code after FINAL CODE: for chain_of_thought
+        if prompting_strategy == "chain_of_thought" and "FINAL CODE:" in raw:
+            raw = raw.split("FINAL CODE:")[-1].strip()
+
+        # strip markdown fences if the model added them anyway
         if raw.startswith("```"):
             lines = raw.split("\n")
             raw = "\n".join(lines[1:-1])

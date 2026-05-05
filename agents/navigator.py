@@ -51,7 +51,7 @@ def get_test_file_contents(repo_path: str) -> dict:
                 test_files[filename] = f.read()
     return test_files
 
-def navigate(repo_path: str, issue_text: str, affected_files: list) -> dict:
+def navigate(repo_path: str, issue_text: str, affected_files: list, use_rag: bool = True) -> dict:
     """
     Main entry point for the navigator agent.
 
@@ -65,14 +65,26 @@ def navigate(repo_path: str, issue_text: str, affected_files: list) -> dict:
     structure = get_file_structure(repo_path)
     print(f"[Navigator] Found files: {list(structure.keys())}")
 
-    # semantic retrieval
-    print("[Navigator] Building semantic index...")
-    collection = build_index(repo_path)
-    relevant_code = retrieve_relevant_code(collection, issue_text, top_k=5)
-
-    # fallback to affected_files if retrieval returned nothing
-    if not relevant_code:
-        print("[Navigator] Retrieval returned nothing, falling back to affected_files")
+    if use_rag:
+        print("[Navigator] Building semantic index...")
+        collection = build_index(repo_path)
+        relevant_code = retrieve_relevant_code(collection, issue_text, top_k=5)
+        relevant_code = {
+            k: v for k, v in relevant_code.items()
+            if not k.startswith("benchmark/")
+            and not k.startswith("agents/")
+        }
+        if not relevant_code:
+            print("[Navigator] Retrieval returned nothing, falling back to affected_files")
+            for filename in affected_files:
+                filepath = os.path.join(repo_path, filename)
+                if os.path.exists(filepath):
+                    with open(filepath, "r") as f:
+                        relevant_code[filename] = f.read()
+    else:
+        print("[Navigator] RAG disabled (ablation: hetero_no_rag), using affected_files directly.")
+        collection = None
+        relevant_code = {}
         for filename in affected_files:
             filepath = os.path.join(repo_path, filename)
             if os.path.exists(filepath):
@@ -87,7 +99,8 @@ def navigate(repo_path: str, issue_text: str, affected_files: list) -> dict:
         "structure": structure,
         "relevant_code": relevant_code,
         "test_files": test_files,
-        "collection": collection
+        "collection": collection,
+        "chunks_retrieved": len(relevant_code) if use_rag else 0
     }
     
     
