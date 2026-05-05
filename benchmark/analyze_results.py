@@ -9,6 +9,9 @@ results = defaultdict(list)
 
 with open("benchmark/results.jsonl") as f:
     for line in f:
+        line = line.strip()
+        if not line:
+            continue
         r = json.loads(line)   # note: json.loads not json.load
         key = (r["configuration"], r["prompting_strategy"])
         results[key].append(r["passed"])

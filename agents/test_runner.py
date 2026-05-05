@@ -42,12 +42,21 @@ def run_tests(repo_path: str, test_file: str = "test_target.py") -> dict:
     """
     Run pytest and return structured results.
     """
-    result = subprocess.run(
-        ["python", "-m", "pytest", test_file, "-v", "--tb=short"],
-        capture_output=True,
-        text=True,
-        cwd=repo_path
-    )
+    try:
+        result = subprocess.run(
+            ["python", "-m", "pytest", test_file, "-v", "--tb=short"],
+            capture_output=True,
+            text=True,
+            cwd=repo_path,
+            timeout=30
+        )
+    except subprocess.TimeoutExpired:
+        print("[Test Runner] pytest timed out after 30 seconds — likely infinite loop in fix")
+        return {
+            "passed": False,
+            "output": "TimeoutExpired: pytest exceeded 30 seconds",
+            "failures": ["timeout — fixed code likely contains infinite loop"]
+        }
 
     passed = result.returncode == 0
     output = result.stdout + result.stderr
